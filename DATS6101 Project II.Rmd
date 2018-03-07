@@ -1,0 +1,703 @@
+---
+title: "DATS6101_Project II"
+author: "Team Alpha: Hninn Khin  - Junior Ovince - David Novy"
+date: "November 25, 2017"
+output: html_document
+---
+##Predictive Analysis of Violence and Abuse in Haitian Women
+
+####Sexual violence against women represents a public health concern affecting women from all parts of the globe, affecting an estimated 30% (Abramsky et al, 2016). Recent events in the United States have even demonstrated the pervasiveness of sexual abuse and harassment, even in a society that has been regarded as advancing womens' rights. Given the extent and severity of the problem, not just in the United States but all societies worldwide, this analysis seeks to identify factors that increase the probability or risk of a woman experiencing some form of sexual or physical violence from a male partner.
+#### 
+####Several studies have been conducted worldwide to study prevalence as well as risk factors of women experiencing sexual forms of sexual or physical violence. The World Health Organization (WHO) identifies some of these factors, including poverty, family history of violence, and social norms, with the underlying origins in the belief that women do not have the same status in society as men ("Violence Against Women", 2017). The WHO goes on to further describe some of the lasting impacts that abuse can have. Not only emotional impacts of the women, including depression and anxiety, but can also have health impacts, including increased likelihood of sexually transmitted diseases, such as HIV. Given the scope and severity of the problem, this analysis seeks to create a model to predict incidents of abuse using the most significant factors.
+\newline
+
+##Data Collection 
+####This dataset is part of the quasi-experimental design of the program Rethinking Power program implemented by Beyond Borders in the South East of Haiti. La commune Lavallée was chosen as the intervention area of this community-led intervention aiming to change the gender power dynamic at the community level and expect to reduce drastically the prevalence of violence against women as well. La commune Marigot was selected as the control area. Global Women's Institute has been leading the impact evaluation and all the baseline data were collected during the year of 2017.
+#### 
+####The data collection is divided into four main components: one population-based survey (women and men household survey), one self-administrative school-based survey, one girl clubs survey, and the qualitative piece. Around 2000 women, 1000 men, and hundreds of students, girls and community members were interviewed from both Lavallée and Marigot. Because the main change of this intervention will be measured through the women household survey, we were allowed to use only the baseline data from the comparison site, Marigot. More than 1200 women were interviewed at this site but our analysis is focused on ever-partnered women, which represented 968 women.The data for this analysis was gathered by a survey of Haitian women through the partnership of the Global Womens' Institute GW and the non-profit group, Beyond Borders. The survey asked women 102 questions spanning from demographic data about themselves, demographic data about her male partner, source of income, number of children, use of drugs and alcohol by her male partner and so on. 
+
+##Data Preparation and Exploratory Data Analysis
+####Initial exploratory data analysis revealed that the data from this survey had 1977 observations and 656 columns, requiring extensive data preparation. First, the number of survey questions used in the analysis was reduced based on likely predictive factors. The first step involved renaming the column headings into more useful terms (for example, changing 'Q1_1a' to 'Age' to make evident to readers that this variable is associated with the age of the woman). As mentioned, only the variables that were considered likely predictive factors as identified by prior knowledge and research were used (for example, a survey question asking the woman the material the roof of her house was made of was not included in the analysis, as this was not a likely factor for predicting abuse). Next, the data was re-classified into appropriate variable types (factor variables versus numeric/integer variables). The raw data included several incidents of #Null, 888, and 999 in the data set (888 indicates the woman did not know or did not know how to read and 999 indicates the woman did not answer). For this reason, the data needed to be cleaned. For these responses in the continuous variables (age), multivariate imputation by chained equations was used to replace NAs with predicted values. The factor variables were releveled to reduce the number of response options and categorize the missing data into an "other" category. In addition, some survey questions were combined to form a single variable. For example, six survey questions asked the women if they've experienced different forms of physical abuse. A new variable was formed to indicate if the woman answered yes to have experienced some form of abuse. After the data was cleaned, the data set was subset to include just women who answered yes to have either been in a relationship in the past or who were currently in a relationship. This was done because the analysis sought to create a predictive model of abuse of women by their male partner. Those who have not been in a relationship would therefore need to be excluded. The data set was also subset based on commune 2, or data taken from the Marigot commune. This was done because the Marigot was the control group in the study; the other commune, La Valle, represented the intervention group, which may have affected the results of the analysis. E
+
+##Model Selection
+####This analysis sought to determine the outcome of an event based on other predictive factors, or independent variables. In this case, the outcome that we want to predict was whether incidents of sexual or physical violence occurred. Given the dependent variable used in the model is a categorical, binary, response variable, a logistic regression was used. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+
+
+```{r}
+
+setwd('C:/Users/dmnov/Documents/DATS6101/Project II')
+library(ggplot2)
+library(pROC)
+library(VIM)
+library(mice)
+
+
+women_data.raw <- read.csv('WomenSurvey.csv')
+str(women_data.raw)
+
+
+#Rename applicable data fields
+names(women_data.raw)[names(women_data.raw) == "Q1_1a"] <- "Age"
+names(women_data.raw)[names(women_data.raw) == "Q1_2"] <- "Readwrite"
+names(women_data.raw)[names(women_data.raw) == "Q1_3"] <- "Attendschool"
+names(women_data.raw)[names(women_data.raw) == "Q1_4"] <- "Highestschool"
+names(women_data.raw)[names(women_data.raw) == "Q1_5"] <- "FmOccupation"
+names(women_data.raw)[names(women_data.raw) == "Q1_6"] <- "FmIncome"
+names(women_data.raw)[names(women_data.raw) == "Q1_8"] <- "CurrentMarried"
+names(women_data.raw)[names(women_data.raw) == "Q1_9"] <- "MarriedPast"
+names(women_data.raw)[names(women_data.raw) == "Q1_10"] <- "RelationshipPast"
+names(women_data.raw)[names(women_data.raw) == "Q1_14a"] <- "AgeMarried"
+names(women_data.raw)[names(women_data.raw) == "Q1_15"] <- "FamilyClose"
+names(women_data.raw)[names(women_data.raw) == "Q1_16"] <- "FamilySupport"
+names(women_data.raw)[names(women_data.raw) == "Q2_1"] <- "NumBirths"
+names(women_data.raw)[names(women_data.raw) == "Q2_2a"] <- "AgePregnant"
+names(women_data.raw)[names(women_data.raw) == "Q3_1a"] <- "GenderroleA"
+names(women_data.raw)[names(women_data.raw) == "Q3_1b"] <- "GenderroleB"
+names(women_data.raw)[names(women_data.raw) == "Q3_1c"] <- "GenderroleC"
+names(women_data.raw)[names(women_data.raw) == "Q3_1d"] <- "GenderroleD"
+names(women_data.raw)[names(women_data.raw) == "Q3_3a"] <- "ViolenceAcceptA"
+names(women_data.raw)[names(women_data.raw) == "Q3_3b"] <- "ViolenceAcceptB"
+names(women_data.raw)[names(women_data.raw) == "Q3_3c"] <- "ViolenceAcceptC"
+names(women_data.raw)[names(women_data.raw) == "Q3_3d"] <- "ViolenceAcceptD"
+names(women_data.raw)[names(women_data.raw) == "Q3_4a"] <- "ViolenceJustA"
+names(women_data.raw)[names(women_data.raw) == "Q3_4b"] <- "ViolenceJustB"
+names(women_data.raw)[names(women_data.raw) == "Q3_4c"] <- "ViolenceJustC"
+names(women_data.raw)[names(women_data.raw) == "Q3_4d"] <- "ViolenceJustD"
+names(women_data.raw)[names(women_data.raw) == "Q3_4e"] <- "ViolenceJustE"
+names(women_data.raw)[names(women_data.raw) == "Q4_3"] <- "CommunityAccept"
+names(women_data.raw)[names(women_data.raw) == "Q4_4_R"] <- "CommunityBeat"
+names(women_data.raw)[names(women_data.raw) == "Q5_1"] <- "MaleAge"
+names(women_data.raw)[names(women_data.raw) == "Q5_2"] <- "MaleReadWrite"
+names(women_data.raw)[names(women_data.raw) == "Q5_3"] <- "MaleAttendschool"
+names(women_data.raw)[names(women_data.raw) == "Q5_4"] <- "Malehighestschool"
+names(women_data.raw)[names(women_data.raw) == "Q5_5"] <- "MaleOccupation"
+names(women_data.raw)[names(women_data.raw) == "Q5_6"] <- "MaleIncome"
+names(women_data.raw)[names(women_data.raw) == "Q5_7"] <- "MaleAlcohol"
+names(women_data.raw)[names(women_data.raw) == "Q5_9"] <- "MaleDrug"
+names(women_data.raw)[names(women_data.raw) == "Q5_10"] <- "MaleFight"
+names(women_data.raw)[names(women_data.raw) == "Q5_12"] <- "MaleAffair"
+names(women_data.raw)[names(women_data.raw) == "Q5_19a"] <- "ControlA"
+names(women_data.raw)[names(women_data.raw) == "Q5_19b"] <- "ControlB"
+names(women_data.raw)[names(women_data.raw) == "Q5_19c"] <- "ControlC"
+names(women_data.raw)[names(women_data.raw) == "Q5_19d"] <- "ControlD"
+names(women_data.raw)[names(women_data.raw) == "Q5_19e"] <- "ControlE"
+names(women_data.raw)[names(women_data.raw) == "Q5_19f"] <- "ControlF"
+names(women_data.raw)[names(women_data.raw) == "Q5_19g"] <- "ControlG"
+names(women_data.raw)[names(women_data.raw) == "Q5_19h"] <- "ControlH"
+names(women_data.raw)[names(women_data.raw) == "Q5_21a"] <- "EconA"
+names(women_data.raw)[names(women_data.raw) == "Q5_21b"] <- "EconB"
+names(women_data.raw)[names(women_data.raw) == "Q5_21c"] <- "EconC"
+names(women_data.raw)[names(women_data.raw) == "Q5_23a_A"] <- "EmotionalA"
+names(women_data.raw)[names(women_data.raw) == "Q5_23b_A"] <- "EmotionalB"
+names(women_data.raw)[names(women_data.raw) == "Q5_23c_A"] <- "EmotionalC"
+names(women_data.raw)[names(women_data.raw) == "Q5_23d_A"] <- "EmotionalD"
+names(women_data.raw)[names(women_data.raw) == "Q5_25a_A"] <- "PhysicalA"
+names(women_data.raw)[names(women_data.raw) == "Q5_25b_A"] <- "PhysicalB"
+names(women_data.raw)[names(women_data.raw) == "Q5_25c_A"] <- "PhysicalC"
+names(women_data.raw)[names(women_data.raw) == "Q5_25d_A"] <- "PhysicalD"
+names(women_data.raw)[names(women_data.raw) == "Q5_25e_A"] <- "PhysicalE"
+names(women_data.raw)[names(women_data.raw) == "Q5_25f_A"] <- "PhysicalF"
+names(women_data.raw)[names(women_data.raw) == "Q5_26a_A"] <- "SexualA"
+names(women_data.raw)[names(women_data.raw) == "Q5_26b_A"] <- "SexualB"
+names(women_data.raw)[names(women_data.raw) == "Q5_26c_A"] <- "SexualC"
+
+#Create new data frame with only the columns of interest
+women_data <- women_data.raw[, c("Age", "Readwrite", "Attendschool", "Highestschool","FmOccupation", "FmIncome", "CurrentMarried", "MarriedPast","RelationshipPast","AgeMarried", "FamilyClose",  "FamilySupport","NumBirths", "AgePregnant", "GenderroleA","GenderroleB","GenderroleC", "GenderroleD", "ViolenceAcceptA",  "ViolenceAcceptB", "ViolenceAcceptC", "ViolenceAcceptD","ViolenceJustA", "ViolenceJustB", "ViolenceJustC", "ViolenceJustD",  "ViolenceJustE",  "CommunityAccept",   "CommunityBeat",  "MaleAge",  "MaleReadWrite", "MaleAttendschool", "Malehighestschool",  "MaleOccupation",  "MaleIncome",  "MaleAlcohol", "MaleDrug",  "MaleFight", "MaleAffair",    "ControlA",  "ControlB",  "ControlC",   "ControlD",   "ControlE",  "ControlF",   "ControlG",  "ControlH",  "EconA",  "EconB",  "EconC",   "EmotionalA",   "EmotionalB", "EmotionalC",   "EmotionalD",   "PhysicalA", "PhysicalB",   "PhysicalC",  "PhysicalD", "PhysicalE",  "PhysicalF",   "SexualA",  "SexualB",  "SexualC", "Id_commune")]
+
+str(women_data)
+                         
+#Reclassify factor variables
+women_data$Readwrite <- as.factor(women_data$Readwrite)
+women_data$Attendschool <- as.factor(women_data$Attendschool)
+women_data$Highestschool <- as.factor(women_data$Highestschool)
+women_data$FmOccupation <- as.factor(women_data$FmOccupation)
+women_data$FmIncome <- as.factor(women_data$FmIncome)
+women_data$CurrentMarried <- as.factor(women_data$CurrentMarried)
+women_data$FamilyClose <- as.factor(women_data$FamilyClose)
+women_data$FamilySupport <- as.factor(women_data$FamilySupport)
+women_data$GenderroleA <- as.factor(women_data$GenderroleA)
+women_data$GenderroleB <- as.factor(women_data$GenderroleB)
+women_data$GenderroleC <- as.factor(women_data$GenderroleC)
+women_data$GenderroleD <- as.factor(women_data$GenderroleD)
+women_data$ViolenceAcceptA <- as.factor(women_data$ViolenceAcceptA)
+women_data$ViolenceAcceptB <- as.factor(women_data$ViolenceAcceptB)
+women_data$ViolenceAcceptC <- as.factor(women_data$ViolenceAcceptC)                  
+women_data$ViolenceAcceptD <- as.factor(women_data$ViolenceAcceptD)
+women_data$ViolenceJustA <- as.factor(women_data$ViolenceJustA)
+women_data$ViolenceJustB <- as.factor(women_data$ViolenceJustB)
+women_data$ViolenceJustC <- as.factor(women_data$ViolenceJustC)
+women_data$ViolenceJustD <- as.factor(women_data$ViolenceJustD)
+women_data$ViolenceJustE <- as.factor(women_data$ViolenceJustE)
+women_data$CommunityAccept <- as.factor(women_data$CommunityAccept)
+women_data$CommunityBeat <- as.factor(women_data$CommunityBeat)
+                         
+
+
+#Remove Null values (Null! and 0) and instances of 'No Response' and 'Doesn't Know' (888 and 999),  from the continuous age variables. Replace with NA. 
+
+#The woman's Age
+women_data$Age[women_data$Age == 888] <- NA
+women_data$Age[women_data$Age == 999] <- NA
+women_data$Age[women_data$Age == 0] <- NA
+women_data$Age[women_data$Age == "#NULL!"] <- NA
+
+#The man's Age
+women_data$MaleAge[women_data$MaleAge == 888] <- NA
+women_data$MaleAge[women_data$MaleAge == 999] <- NA
+women_data$MaleAge[women_data$MaleAge == 0] <- NA
+women_data$MaleAge[women_data$MaleAge == "#NULL!"] <- NA
+
+#The age of the woman when she got married
+women_data$AgeMarried[women_data$AgeMarried == 888] <- NA
+women_data$AgeMarried[women_data$AgeMarried == 999] <- NA
+women_data$AgeMarried[women_data$AgeMarried == 0] <- NA
+women_data$AgeMarried[women_data$AgeMarried == "#NULL!"] <- NA
+
+#The age of the woman when she got pregnat
+women_data$AgePregnant[women_data$AgePregnant == 888] <- NA
+women_data$AgePregnant[women_data$AgePregnant == 999] <- NA
+women_data$AgePregnant[women_data$AgePregnant == 0] <- NA
+women_data$AgePregnant[women_data$AgePregnant == "#NULL!"] <- NA
+
+
+
+
+#Reclassify factor variables as integer variables
+women_data$MaleAge <- as.numeric(levels(women_data$MaleAge))[as.integer(women_data$MaleAge)]
+women_data$AgeMarried <- as.numeric(levels(women_data$AgeMarried))[as.integer(women_data$AgeMarried)]
+women_data$AgePregnant <- as.numeric(levels(women_data$AgePregnant))[as.integer(women_data$AgePregnant)]
+
+
+
+#Create new column that indicates if a woman answered to "yes" to have experienced any form of controlling abuse
+#1: Women who have experienced a form of controlling abuse
+#0: Women who have not experienced a form of controlling abuse
+women_data$controlAbuse <- ifelse(((women_data$ControlA == "1") |
+                                   (women_data$ControlB == "1") |
+                                   (women_data$ControlC == "1") |
+                                   (women_data$ControlD == "1") |
+                                   (women_data$ControlE == "1") |
+                                   (women_data$ControlF == "1") |
+                                   (women_data$ControlG == "1") |
+                                   (women_data$ControlH == "1")), 1, 0)
+
+women_data$controlAbuse <- as.factor(women_data$controlAbuse)
+levels(women_data$controlAbuse) <- c("No Controlling Abuse", "Controlling Abuse")
+
+
+
+#Create new column that indicates if a woman answered to "yes" to have experienced any form of economical abuse
+#0: Women who have not experienced economical abuse
+#1: Women who have experienced economic abuse
+women_data$econAbuse <- ifelse(((women_data$EconA == "1") |
+                                (women_data$EconB == "1") |
+                                (women_data$EconC == "1")), 1, 0)
+
+women_data$econAbuse <- as.factor(women_data$econAbuse)
+levels(women_data$econAbuse) <- c("No Econ Abuse", "Econ Abuse")
+
+
+#Create new column that indicates if a woman answered to "yes" to have experienced any form of emotional abuse
+#0: Women who have not experienced emotional abuse
+#1: Women who have experienced emotional abuse
+women_data$emotionalAbuse <- ifelse(((women_data$EmotionalA == "1") |
+                                     (women_data$EmotionalB == "1") |
+                                     (women_data$EmotionalC == "1") |
+                                     (women_data$EmotionalD == "1")), 1, 0) 
+
+women_data$emotionalAbuse <- as.factor(women_data$emotionalAbuse)  
+levels(women_data$emotionalAbuse) <- c("No Emotional Abuse", "Emotional Abuse")
+
+
+#Create new column that indicates if a woman answered to "yes" to have experienced any form of physical abuse
+#0: Women who have not experienced physical abuse
+#1: Women who have experienced physical abuse
+women_data$physicalAbuse <- ifelse(((women_data$PhysicalA == "1") |
+                                    (women_data$PhysicalB == "1") |
+                                    (women_data$PhysicalC == "1") |
+                                    (women_data$PhysicalD == "1") |
+                                    (women_data$PhysicalE == "1") |
+                                    (women_data$PhysicalF == "1")), 1, 0)
+
+women_data$physicalAbuse <- as.factor(women_data$physicalAbuse)
+levels(women_data$physicalAbuse) <- c("No Pysical Abuse", "Physical Abuse")
+
+
+#Create new column that indicates if a woman answered to "yes" to have experienced any form of sexual abuse
+#0: Women who have not experienced sexual abuse
+#1: Women who have experienced sexual abuse
+women_data$sexualAbuse <- ifelse(((women_data$SexualA == "1") |
+                                  (women_data$SexualB == "1") |
+                                  (women_data$SexualC == "1")), 1, 0)
+
+women_data$sexualAbuse <- as.factor(women_data$sexualAbuse)
+levels(women_data$sexualAbuse) <- c("No Sexual Abuse", "Sexual Abuse")
+
+#Create a new column that indicates answered yes to having experienced some form of physical or sexal abuse
+women_data$sexphysAbuse <- ifelse(((women_data$sexualAbuse == "Sexual Abuse") |
+                                  (women_data$physicalAbuse == "Physical Abuse")), 1, 0)
+women_data$sexphysAbuse <- as.factor(women_data$sexphysAbuse)
+levels(women_data$sexphysAbuse) <- c("No sex/phys abuse", "Sex/phys abuse")
+
+
+#Create new column that indicates if a woman answered to "yes" for being in a relationship, 
+#0: Women who are not or have not been in an relationship
+#1: Women who are or have been in a relationship / married, or have lived with a man
+women_data$EverPartnered <- ifelse (((women_data$CurrentMarried == "1") |
+                                     (women_data$CurrentMarried == "2") |
+                                     (women_data$MarriedPast == "1") |
+                                     (women_data$MarriedPast == "2") |
+                                     (women_data$RelationshipPast == "1")), 1, 0)
+
+women_data$EverPartnered <- as.factor(women_data$EverPartnered)
+levels(women_data$EverPartnered) <- c("Never Partnered", "Partnered")
+
+
+#Create new column that indicates if a woman answered agree to gender norm questions
+#0: Women responded did not respond positively to agreeing with traditional gender norms
+#1: Women responded to at least one question positively to agreeing with traditional gender norms
+women_data$GenderRole <- ifelse (((women_data$GenderroleA == "1") |
+                                  (women_data$GenderroleB == "1") |
+                                  (women_data$GenderroleC == "1") |
+                                  (women_data$GenderroleD == "2")), 1, 0)
+
+women_data$GenderRole <- as.factor(women_data$GenderRole)
+levels(women_data$GenderRole) <- c("No Gender Norms", "Gender Norms")
+
+
+
+#Create new column that indicates if a woman answered agree to any of the questions related to the acceptance of violence
+#0: Women did not respond positively to an attitude of accepting violence
+#1: Women who responded positively to an attitude of accepting violence
+women_data$ViolenceAccept <- ifelse (((women_data$ViolenceAcceptA == "1") |
+                                      (women_data$ViolenceAcceptB == "1") |
+                                      (women_data$ViolenceAcceptC == "1") |
+                                      (women_data$ViolenceAcceptD == "2")), 1, 0)
+
+women_data$ViolenceAccept <- as.factor(women_data$ViolenceAccept)
+levels(women_data$ViolenceAccept) <- c("Not Accept Violence", "Accept Violence")
+
+#Create new column that indicates if a woman answered agree to any of the questions related to the justification of violence
+#0: Women who did not respond positively to an attitude of justifying violence
+#1: Women who did respond positively to an attitude of justifying violence
+women_data$ViolenceJust <- ifelse (((women_data$ViolenceJustA == "1") |
+                                    (women_data$ViolenceJustB == "1") |
+                                    (women_data$ViolenceJustC == "1") |
+                                    (women_data$ViolenceJustD == "1") |                             
+                                    (women_data$ViolenceJustE == "1")), 1, 0)
+
+women_data$ViolenceJust <- as.factor(women_data$ViolenceJust)
+levels(women_data$ViolenceJust) <- c("Violence Not Justified", "Violence Justified")
+
+
+#Re-Level the education variable
+#0: Women / Men who cannot read or who did not answer
+#1: Women / Men who have attended primary education, uncompleted (1) or completed (2)
+#2: Women / Men who have attended secondary, uncompleted (3) or completed (4)
+#3: Women / Men who have attended higher level education (5)
+women_data$FmEducation <- ifelse(((women_data$Highestschool == "1") |
+                                  (women_data$Highestschool == "2")), 1, 
+                          ifelse(((women_data$Highestschool == "3") |
+                                 (women_data$Highestschool == "4")), 2,
+                          ifelse((women_data$Highestschool == "5"), 3, 0)))
+women_data$FmEducation <- as.factor(women_data$FmEducation)
+levels(women_data$FmEducation) <- c("Cannot Read", "Primary", "Secondary", "Higher")
+
+women_data$MaleEducation <- ifelse(((women_data$Malehighestschool == "1") |
+                                    (women_data$Malehighestschool == "2")), 1, 
+                            ifelse(((women_data$Malehighestschool == "3") |
+                                    (women_data$Malehighestschool == "4")), 2,
+                            ifelse((women_data$Malehighestschool == "5"), 3, 0))) 
+women_data$MaleEducation <- as.factor(women_data$MaleEducation)
+levels(women_data$MaleEducation) <- c("Cannot Read", "Primary", "Secondary", "Higher")
+
+
+
+#Create new variable for men /  women source of income
+#0: No income / support from pension / public / other
+#1: Own work (2)
+#2: Support from partner (3)
+#3: Support from relatives (5) / parents (4)
+women_data$FmIncomeSource <- ifelse((women_data$FmIncome == "2"), 1, 
+                             ifelse((women_data$FmIncome == "3"), 2, 
+                             ifelse(((women_data$FmIncome == "4") |
+                                     (women_data$FmIncome == "5")), 3, 0 )))
+women_data$FmIncomeSource <- as.factor(women_data$FmIncomeSource)
+levels(women_data$FmIncomeSource) <- c("No/Other/Public Income", "Self", "Partner", "Relatives")
+
+
+women_data$MaleIncomeSource <- ifelse((women_data$MaleIncome == "2"), 1, 
+                               ifelse((women_data$MaleIncome == "3"), 2, 
+                               ifelse(((women_data$MaleIncome == "4") |
+                                     (women_data$MaleIncome == "5")), 3, 0 )))   
+women_data$MaleIncomeSource <- as.factor(women_data$MaleIncomeSource)
+levels(women_data$MaleIncomeSource) <- c("No/Other/Public Income", "Self", "Partner", "Relatives")
+
+
+
+#Relevel the variable representing whether or not the community accepts men doing traditional housework
+#0: Women did not answer or were indifferent
+#1: Women who said the community would approve of a man doing housework
+#2: women who said the community would disapprove a man doing housework
+women_data$CommunityAccept <- ifelse((women_data$CommunityAccept == "1"), 1, 
+                               ifelse((women_data$CommunityAccept == "2"), 2, 0))
+women_data$CommunityAccept <- as.factor(women_data$CommunityAccept)
+levels(women_data$CommunityAccept) <- c("No Answer/ Indifferent", "Approve", "Disapprove")
+                               
+
+
+#Relevel the variable representing whether the community accepts men beating their wife
+#0: Women who did not answer or were indifferent
+#1: Women who said the community would approve a man beating his wife
+#2: Women who said the community would disapprove a man beating his wife
+women_data$CommunityBeat <- ifelse((women_data$CommunityBeat == "1"), 1, 
+                               ifelse((women_data$CommunityBeat == "2"), 2, 0))
+women_data$CommunityBeat <- as.factor(women_data$CommunityBeat)
+levels(women_data$CommunityBeat) <- c("No Answer / Indifferent", "Approve", "Disapprove")
+
+
+#Relevel the variable for representing whether the family is close enough to visit often
+#0: Family is not close / did not answer
+#1: Family is close enough (1) or currently living with family (2)
+women_data$FamilyClose <- ifelse(((women_data$FamilyClose == "1") | 
+                                  (women_data$FamilyClose == "3")), 1, 0)
+women_data$FamilyClose <- as.factor(women_data$FamilyClose)
+levels(women_data$FamilyClose) <- c("Not Close", "Close")
+   
+#Relevel the variables for represeting whether the the family can be relied on for support
+#0: The family cannot be relied on for support / no answer
+#1: The family can be relied on for supprt
+women_data$FamilySupport <- ifelse((women_data$FamilySupport == "1"), 1, 0) 
+women_data$FamilySupport <- as.factor(women_data$FamilySupport)
+levels(women_data$FamilySupport) <- c("No Support", "Support")
+
+
+#Relevel the varialbes for if / how often the womens' male partner does drugs
+#0: The man does not do drugs (5) or no answer
+#1: The man does drugs nearly every day (1) or several times per week (2)
+#2: The man does drugs a few times a month (3) or a few times per year (4)
+women_data$MaleDrug <- ifelse(((women_data$MaleDrug == "1") |
+                               (women_data$MaleDrug == "2")), 1,
+                       ifelse(((women_data$MaleDrug == "3") |
+                               (women_data$MaleDrug == "4")), 2, 0))
+women_data$MaleDrug <- as.factor(women_data$MaleDrug)
+levels(women_data$MaleDrug) <- c("Never", "Often", "Occasionally")
+
+
+
+#Relevel the variables for if / how often the womens' male partner consumes alcohol
+#0: The man does not drink alcohol (5) or no answer
+#1: The man does  drink alcohol nearly every day (1) or several times per week (2)
+#2: The man does drink alcohol a few times a month (3) or a few times per year (4)
+women_data$MaleAlcohol <- ifelse(((women_data$MaleAlcohol == "1") |
+                                  (women_data$MaleAlcohol == "2")), 1,
+                          ifelse(((women_data$MaleAlcohol == "3") |
+                                  (women_data$MaleAlcohol == "4")), 2, 0))
+women_data$MaleAlcohol <- as.factor(women_data$MaleAlcohol)
+levels(women_data$MaleAlcohol) <- c("Never", "Often", "Occasionally")
+
+
+#Relevel the variable for whether the man was seeing fight another male
+#0: No or no answer
+#1: The male was seen fighting another male in the last month
+women_data$MaleFight <- ifelse((women_data$MaleFight == "1"), 1, 0)
+women_data$MaleFight <- as.factor(women_data$MaleFight)
+levels(women_data$MaleFight) <- c("No Fights", "Fights")
+
+
+#Relevel the variable for whether the male has had an affair
+#0: No or no answer
+#1: The male has had an affair with another woman
+women_data$MaleAffair <- ifelse((women_data$MaleAffair == "1"), 1, 0)  
+women_data$MaleAffair <- as.factor(women_data$MaleAffair)
+levels(women_data$MaleAffair) <- c("No Affair", "Affair")
+
+
+
+#Relevel the variable for  the woman's occupation
+#0: Not working / Retired
+#1: Works
+#2: Student
+#3: Agricultural
+women_data$FmOccupation <- ifelse(((women_data$FmOccupation == "2") |
+                                   (women_data$FmOccupation == "3") |
+                                   (women_data$FmOccupation == "4") |                                   
+                                   (women_data$FmOccupation == "5") | 
+                                   (women_data$FmOccupation == "6") |                                     
+                                   (women_data$FmOccupation == "7") |
+                                   (women_data$FmOccupation == "8") |                
+                                   (women_data$FmOccupation == "9") |                                    
+                                   (women_data$FmOccupation == "12") | 
+                                   (women_data$FmOccupation == "14") |   
+                                   (women_data$FmOccupation == "15")), 1,
+                            ifelse((women_data$FmOccupation == "10"), 2,                                  
+                            ifelse((women_data$FmOccupation == "13"), 3, 0)))   
+women_data$FmOccupation <- as.factor(women_data$FmOccupation)
+levels(women_data$FmOccupation) <- c("Not Working / Retired", "Working", "Student", "Agriculture")
+
+
+
+                                     
+women_data$MaleOccupation <- ifelse(((women_data$MaleOccupation == "2") |
+                                   (women_data$MaleOccupation == "3") |
+                                   (women_data$MaleOccupation == "4") |                                 
+                                   (women_data$MaleOccupation == "5") | 
+                                   (women_data$MaleOccupation == "6") |                                   
+                                   (women_data$MaleOccupation == "7") |
+                                   (women_data$MaleOccupation == "8") |                
+                                   (women_data$MaleOccupation == "9") |                                   
+                                   (women_data$MaleOccupation == "12") | 
+                                   (women_data$MaleOccupation == "14") |   
+                                   (women_data$MaleOccupation == "15")), 1,
+                            ifelse((women_data$MaleOccupation == "10"), 2,                                    
+                            ifelse((women_data$MaleOccupation == "13"), 3, 0)))  
+women_data$MaleOccupation <- as.factor(women_data$MaleOccupation)
+levels(women_data$MaleOccupation) <- c("Not Working / Retirerd", "Working", "Student", "Agriculture")
+
+
+#Subset data into Id_communce = 2
+women_data_commune <- subset(women_data, women_data$Id_commune == 2)
+
+
+
+
+
+#Subset data into just those women who have been married, partnered, or in a relationship with a man
+women_data_partnered <- subset(women_data_commune, women_data_commune$EverPartnered == "Partnered")
+
+women_data_final <- women_data_partnered[, c("Age", "Readwrite", "FmEducation","FmOccupation", "FmIncomeSource","AgeMarried", "FamilyClose",  "FamilySupport","NumBirths", "AgePregnant",  "CommunityAccept",   "CommunityBeat",  "MaleAge", "MaleEducation",  "MaleOccupation",  "MaleIncomeSource",  "MaleAlcohol", "MaleDrug", "MaleFight",   "MaleAffair",  "controlAbuse", "econAbuse", "emotionalAbuse", "physicalAbuse", "sexualAbuse", "sexphysAbuse", "EverPartnered", "GenderRole", "ViolenceAccept", "ViolenceJust")]
+
+
+
+
+#Exploratory Data Analysis
+countNA(women_data_final)
+str(women_data_final)
+head(women_data_final)
+tail(women_data_final)
+plot(women_data_final$sexphysAbuse, main = "Incidents of Sexual / Physical Abuse", ylab = "Number of Women")
+
+
+#Replace any NAs in the data set via multivariable imputation by chained equations
+set.seed(1)
+women_data_complete1 <- mice(women_data_final, m=5, maxit = 5, method = "pmm")
+women_data_complete2<- complete(women_data_complete1, 1)
+
+
+
+#Create a new column that calculates the difference between the age of the male and the woman
+women_data_complete2$AgeDifference <- women_data_complete2$MaleAge - women_data_complete2$Age
+
+str(women_data_complete2)
+
+library(scales)
+
+#Distribution of women's ages and their male partner's ages in combined histogram
+ageplot <- data.frame(WomensAge = women_data_complete2$Age, MensAge = women_data_complete2$MaleAge)
+ggplot(melt(ageplot), aes(value, fill = variable), xlab="Age") + geom_histogram(position = "dodge") + ggtitle("Age Distribution")
+
+
+#Controlling abuse with sexual and physical abuse
+ggplot(women_data_complete2,aes(factor(women_data_complete2$controlAbuse),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+#Emotional abuse with sexual and physical abuse
+ggplot(women_data_complete2,aes(factor(women_data_complete2$emotionalAbuse),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+#Econmic abuse with sexual and physical abuse
+ggplot(women_data_complete2,aes(factor(women_data_complete2$econAbuse),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+#Female who can read&write with sexual and physical abuse
+ggplot(women_data_complete2,aes(factor(women_data_complete2$Readwrite),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+#Femal education with sexual and physical abuse
+ggplot(women_data_complete2,aes(factor(women_data_complete2$FmEducation),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+#Male education with sexual and physical abuse
+ggplot(women_data_complete2,aes(factor(women_data_complete2$MaleEducation),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+
+ggplot(women_data_complete2,aes(factor(women_data_complete2$MaleIncomeSource),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+ggplot(women_data_complete2,aes(factor(women_data_complete2$ViolenceJust),fill=factor(women_data_complete2$sexphysAbuse)))+geom_bar() + scale_y_discrete(labels=percent)
+
+
+#Logistic Regression: Separate data into Training (roughly 80%) and Testing (roughly 20%)
+women_data_training <- women_data_complete2[1:775,]
+women_data_testing <- women_data_complete2[776:968,]
+```
+##Logistic Regression Model
+
+####With testing and training data segmented, logistic regression models can be run using the training data, and the model can be evaluated using the testing data. The optimize the model, several regressions will be run to identify the significant variables that best predict whether a woman will experience physical or sexual violence. First, a model using all the variables will be used.   Then in a stepwise manor, backwards selection will be used until only significant variables remain. The quality of the models will be evaluated using the Akaike Information Criteria (AIC) and ANOVA. (A significance level of alpha = 0.05 was used in this analysis to identify the variables that are significantly contributing to the model.)
+
+```{r}
+library(pscl)
+
+#Run a logistic regression of instances of sexual or physical abuse using all variables. Identify the significant variables, then repeat using only those variables. 
+abuselog1 <- glm(women_data_training$sexphysAbuse ~ women_data_training$Age +
+                                                    women_data_training$controlAbuse +
+                                                    women_data_training$econAbuse +
+                                                    women_data_training$emotionalAbuse +
+                                                    women_data_training$Readwrite +
+                                                    women_data_training$FmEducation +
+                                                    women_data_training$FmOccupation +
+                                                    women_data_training$FmIncomeSource +
+                                                    women_data_training$AgeMarried +
+                                                    women_data_training$FamilyClose +
+                                                    women_data_training$FamilySupport +
+                                                    women_data_training$NumBirths +
+                                                    women_data_training$AgePregnant +
+                                                    women_data_training$AgeDifference +
+                                                    women_data_training$CommunityAccept +
+                                                    women_data_training$CommunityBeat +
+                                                    women_data_training$MaleAge +
+                                                    women_data_training$MaleEducation +
+                                                    women_data_training$MaleOccupation +
+                                                    women_data_training$MaleIncomeSource +
+                                                    women_data_training$MaleAlcohol +
+                                                    women_data_training$MaleDrug +
+                                                    women_data_training$MaleFight +
+                                                    women_data_training$MaleAffair +
+                                                    women_data_training$ViolenceAccept +
+                                                    women_data_training$ViolenceJust +
+                                                    women_data_training$GenderRole, family = binomial(link = "logit"), data = women_data_training)
+
+summary(abuselog1)
+pR2(abuselog1)
+
+#Remove all variables that are not significantly contributing to the model output.
+
+abuselog2 <- glm(women_data_training$sexphysAbuse ~ 
+                                                    women_data_training$controlAbuse +
+                                                    women_data_training$emotionalAbuse +
+                                                    women_data_training$econAbuse +
+                                                    women_data_training$Readwrite +
+                                                    women_data_training$FmEducation +
+                                                    women_data_training$MaleEducation +
+                                                    women_data_training$MaleIncomeSource +
+                                                    women_data_training$ViolenceJust, family = binomial(link = "logit"), data = women_data_training)
+
+summary(abuselog2)
+pR2(abuselog2)
+
+
+#The AIC decreasd significantly. All the variables are still significant; remove Male Education and Male Income Sources, as these were the least significant
+
+abuselog3 <- glm(women_data_training$sexphysAbuse ~ 
+                                                    women_data_training$controlAbuse +
+                                                    women_data_training$emotionalAbuse +
+                                                    women_data_training$econAbuse +
+                                                    women_data_training$Readwrite +
+                                                    women_data_training$FmEducation +
+                                                    women_data_training$ViolenceJust, family = binomial(link = "logit"), data = women_data_training)
+
+summary(abuselog3)
+pR2(abuselog3)
+
+#The AIC increased; stay with model number 2.Use ANOVA to see if there are significant differences between the three different models
+anova(abuselog1, abuselog2, test = "Chisq")
+anova(abuselog2, abuselog3, test = "Chisq")
+anova(abuselog1, abuselog3, test = "Chisq")
+#Only significant differences exist between model 2 and model 3. Continue using model 2 given the better AIC.
+
+
+
+
+
+
+#Best GLM can be used to determine if there is a better combination of the variables identified by the backwards regression model
+library(bestglm)
+
+women_best_data <- women_data_training [, c("controlAbuse", "emotionalAbuse", "econAbuse", "Readwrite", "FmEducation", "MaleEducation", "MaleIncomeSource", "ViolenceJust", "sexphysAbuse")]
+
+logres.bglm <- bestglm(Xy = women_best_data, family = binomial, IC = "AIC", method = "exhaustive")
+logres.bglm$BestModels
+summary(logres.bglm$BestModel)
+
+
+
+#Best GLM confirmed that we should not exclude any more variables. Continue using model 2.
+
+
+#Convert the output of the logistic model from log odds to precentage of liklihood:
+exp(coef(abuselog2))
+
+#Create a new model using only the significant variables
+abuselog4 <- glm(women_best_data$sexphysAbuse ~., family = binomial(link = "logit"), data = women_best_data)
+summary(abuselog4)
+```
+##Interpretation of Logistic Regression Model
+####Backwards selection revealed 8 variables that significantly contributed to the response variable of incidents of sexual or physical violence. Below is how the variables increase or decrease the probability of a woman having experienced sexual or physical violence:
+#### 148% increase if the woman experienced controlling behavior
+#### 818% increase if the woman experienced some form of emotional abuse
+#### 70% increase if the woman experienced some form of economic abuse
+#### 361% increase if the woman's highest education is primary school (compared to no school)
+#### 365% increase if the woman's highest education is secondary school (compared to no school)
+#### 262% increase if the woman's highest education is higher education (compared to no school)
+#### 0% increase if the man's highest education is primary school (compared to no school)
+#### 22% decrease if the man's highest education is secondary school (compared to no school)
+#### 72% decrease if the man's highest education is higher education (compared to no school)
+#### 115% increase if the woman stated that a man is justified in violent acts against a female
+
+##Model Evaluation and Prediction
+####To see how well the logistic model performs, a ROC curve will be plotted to measure the sensitivity and specificity of the model. If the area under the curve is over 0.8, the model will be considered relatively good at predicting. 
+
+####Lastly, the logistic regression model will be used on the testing data set to see how accurate the model was in predicting sexual or physical violence. If the model is able to accurately predict at rate of over 80%, the model can be considered to perform well, and will confirm that the model is not biased towards only the training data.
+
+
+```{r}
+
+#Create a ROC Curve to evaluate the model
+library(pROC)
+predict_model <- predict(abuselog2, type = c("response"))
+Predict_model_roc <- roc(women_data_training$sexphysAbuse~predict_model)
+plot(Predict_model_roc, main = "Logistic Regression ROC")
+Predict_model_roc
+
+#Create a new data set using only the variables found significant in training data's logistic regression
+new_testing_data <-women_data_testing [, c("controlAbuse", "emotionalAbuse", "econAbuse", "Readwrite", "FmEducation", "MaleEducation", "MaleIncomeSource", "ViolenceJust", "sexphysAbuse")]
+
+
+#Predict the responses in the test data and find the hit rate
+library(ROCR)
+predict_test_data <- predict.glm(abuselog4, new_testing_data, type = 'response')
+predict_test_data2 <- ifelse(predict_test_data >0.5, 1,0)
+test_model_hit <- mean(predict_test_data2!=as.numeric(new_testing_data$sexphysAbuse))
+test_model_hit
+
+#Create a ROC curve of the test data and find the area under the curve.
+predict_model3 <- prediction(predict_test_data, new_testing_data$sexphysAbuse)
+newpred.performance <- performance(predict_model3, measure = "tpr",x.measure = "fpr")
+plot(newpred.performance, main = "Predicted Responses of Test Data")
+AUC <- performance(predict_model3, measure = "auc")
+AUC
+
+
+
+
+
+
+```
+##Conclusion
+####An ROC plot was created for the logistic regression from the training data to graph the sensitivity versus specificity. The area under the curve (AUC) for the ROC plot was 0.835 and the McFadden pseudo R-squared was 0.27, indicating the model performs reasonably well. The logistic model was then used on the testing data to ensure that the model was not biased to the training data. The logistic model predicted responses of sexual and physical violence in the test data, using a threshold of 0.5 (if the predicted response was greater than 0.5, the response was characterized as a '1', or incident of sexual / physical violence. Predicted responses less than 0.5 was characterized as no sexual / physical violence). The hit rate of the responses was 92%, indicating the model performed fairly well. An ROC plot was also created for the regression model on the test data, and had an AUC of 0.815, further supporting the performance of the model.
+
+####Given the performance of the model, the factors identified as significant could be interpreted as risk factors for sexual or physical violence. If a womans' demographic data or living conditions are associated with these variables, intervention methods can be put in place to prevent sexual or physical violence from occurring. 
+
+##Limitation on the Data
+####This data set was based on survey, meaning the data was based on the responses of those questioned. As seen in this data set, some of the questions were not responded to, which required re-leveling to be able to use the data in the analysis. In addition, the dependent variable of experiences of some form of abuse was based on the the womens' responses. It is possible that some women may have not have answered affirmatively to have experiencing abuse out of fear of retribution. To test the validity of the findings further, the survey and analysis could be conducted for other societies to see if the risk factors translate to other societies.
+
+
+
+##References
+
+####Abramsky T, Devries KM, Michau L, et al.J Epidemiol Community Health 2016;70:818-825.
+
+####"Violence Against Women".WHO Media Centre. World Health Organization. November 2017. Web. Dec 9 2017. ####<http://www.who.int/mediacentre/factsheets/fs239/en/>
+
+####"Haiti Impact Evaluation PLan: Impact Evaluation of the Rethinking Power Program in South East Haiti". Global Women's Institute and Beyond Borders. Dec 20 2016. 
+
+
